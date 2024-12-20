@@ -7,6 +7,7 @@ import (
 	"time"
 	
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -50,20 +51,18 @@ func TestAddGetDelete(t *testing.T) {
 	// Получение добавленной посылки
 	storedParcel, err := store.Get(id)
 	require.NoError(t, err)  // Проверка, что ошибки нет
-	require.Equal(t, id, storedParcel.Number)  // Проверка совпадения идентификатора
-	require.Equal(t, parcel.Client, storedParcel.Client)  // Проверка клиента
-	require.Equal(t, parcel.Status, storedParcel.Status)  // Проверка статуса
-	require.Equal(t, parcel.Address, storedParcel.Address)  // Проверка адреса
-	
+	parcel.Number = id  // Устанавливаем идентификатор добавленной посылки в исходной структуре, чтобы структуры стали идентичными
+	require.Equal(t, parcel, storedParcel)  // Сравнение всей структуры целиком
+
 	// delete
 	// Удаление добавленной посылки
 	err = store.Delete(id)
 	require.NoError(t, err)  // Проверка, что ошибки нет
 
-
 	// Проверка, что посылка удалена
 	_, err = store.Get(id)
 	require.Error(t, err)  // Ожидаем ошибку при попытке получить удалённую запись
+	require.ErrorIs(t, err, sql.ErrNoRows)  // Проверяем, что ошибка — отсутствие записи в БД
 }
 
 // TestSetAddress проверяет обновление адреса
@@ -93,6 +92,10 @@ func TestSetAddress(t *testing.T) {
 	// Проверка, что адрес обновился
 	storedParcel, err := store.Get(id)
 	require.NoError(t, err)
+	if err != nil {
+		require.ErrorIs(t, err, sql.ErrNoRows)
+    	return
+	}
 	require.Equal(t, newAddress, storedParcel.Address)  // Проверка нового адреса
 }
 
@@ -123,6 +126,10 @@ func TestSetStatus(t *testing.T) {
 	// Проверка, что статус обновился
 	storedParcel, err := store.Get(id)
 	require.NoError(t, err)
+	if err != nil {
+		require.ErrorIs(t, err, sql.ErrNoRows)
+		return
+	}
 	require.Equal(t, newStatus, storedParcel.Status)  // Проверка нового статуса
 }
 
@@ -165,14 +172,18 @@ func TestGetByClient(t *testing.T) {
 	// Получение всех посылок по идентификатору клиента
 	storedParcels, err := store.GetByClient(client) 
 	require.NoError(t, err)
+	if err != nil {
+		require.ErrorIs(t, err, sql.ErrNoRows)
+		return
+	}
 	require.Len(t, storedParcels, 3)  // Проверка, что получено 3 записи
 
 	// check
 	// Проверка совпадения добавленных и полученных посылок
 	for _, parcel := range storedParcels {
-		require.Contains(t, parcelMap, parcel.Number)  // Убедитесь, что посылка есть в map
-		require.Equal(t, parcelMap[parcel.Number].Client, parcel.Client)  // Проверка поля Client
-		require.Equal(t, parcelMap[parcel.Number].Status, parcel.Status)  // Проверка поля Status
-		require.Equal(t, parcelMap[parcel.Number].Address, parcel.Address)  // Проверка поля Address
+		assert.Contains(t, parcelMap, parcel.Number)  // Убедитесь, что посылка есть в map
+		if assert.Contains(t, parcelMap, parcel.Number) {  // Дополнительная проверка перед сравнением
+			assert.Equal(t, parcelMap[parcel.Number], parcel)
+		}
 	}
 }
